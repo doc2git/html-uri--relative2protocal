@@ -3,24 +3,35 @@
 const fs = require('fs');
 const url = require('url');
 const is = require('valido');
+const config = require('./config');
 
-function absolutify(baseUrl, partialUrl) {
-    if (!is.uri(baseUrl)) {
-        throw new TypeError('Invalid base URL');
+function genSingleUrl(config, curHtml, innerRelativePath) {
+
+    if (!is.uri(config.baseUri)) {
+        throw new TypeError('Invalid baseUri');
     }
 
-    if (!is.string(partialUrl)) {
-        throw new TypeError('Invalid partial URL');
+    if (!is.string(config.basePath) || !/^\//.test(config.basePath)) {
+        throw new TypeError('Invalid basePath');
     }
 
-    if (is.uri(partialUrl)) {
-        return partialUrl;
+    if (!is.string(curHtml)) {
+        throw new TypeError('Invalid current path');
     }
 
-    return url.resolve(baseUrl, partialUrl);
+    if (!is.string(innerRelativePath)) {
+        throw new TypeError('Invalid relative path');
+    }
+
+    if (is.uri(innerRelativePath)) {
+        return innerRelativePath;
+    }
+
+    config.basePath = config.basePath.replace(/\/$/, '');
+    config.baseUri = config.baseUri.replace(/\/$/, '');
+    var absolutePath = url.resolve(curHtml, '../' + innerRelativePath);
+    return absolutePath.replace(config.basePath, config.baseUri);
 }
-
-
 
 var read = (filePath, obj) => {
     return fs.readFileSync(filePath, 'utf8');
@@ -31,28 +42,19 @@ var write = (callback, filePath, strContent) =>
         .then(
             function (filePath) {
                 fs.writeFile(filePath, strContent, 'utf8', err => {
-                    console.log(strContent, '35++++++');
-                    console.log(filePath, '34------');
                     if(err) console.error(err);
+		    console.log(filePath + ' has been converted!\n');
                 });
             }
         );
-//
-// function ToHandleFileMaterial(filename = '', content = '') {
-//     this.filename = filename;
-//     this.content = content;
-// }
 
-
-function replaceRelativeUriToProtocalUriInHtml(uriBase, ...args) {
-    // var [node, script, uriBase, ...args] = process.argv;
-// args = Array.prototype.slice.call(args, 0);
-    args = [...args];
+function replaceRelativeUriToProtocalUriInHtml(config, ...args) {
+    args = config.uriReplaceSrcList.concat([...args]);
     let defaultFnRenameFileRule = function (inputFilename) {
         return inputFilename.replace(/\.html$/, '') + '-converted' + '.html';
     };
     let fnRenameFileRule = args[0];
-    if (typeof args[0] == 'function') {
+    if (typeof args[0] === 'function') {
         args[0] = args.slice(-1)[0];
         args.length--;
     }else{
@@ -63,7 +65,11 @@ function replaceRelativeUriToProtocalUriInHtml(uriBase, ...args) {
 
         function relativeToProtocal(content) {
             return content.replace(/\.\.\/[^"']*/g, function () {
-                return absolutify(uriBase, arguments[0]);
+                return genSingleUrl(
+                    config,
+                    itemName,
+                    arguments[0]
+                );
             })
         }
 
@@ -71,9 +77,6 @@ function replaceRelativeUriToProtocalUriInHtml(uriBase, ...args) {
             relativeToProtocal(read(itemName, f))
         )
             .then(function (content) {
-                // itemName = itemName.replace(/\.html$/, '') + '-converted' + '.html';
-                //     itemName = fnRenameFileRule(itemName);
-                // console.log(itemName, '----------##############*******-------:::::::::::::::::::::');
                 write(fnRenameFileRule, itemName, content);
             });
 
@@ -81,10 +84,9 @@ function replaceRelativeUriToProtocalUriInHtml(uriBase, ...args) {
 }
 
 if (process.argv.length > 4) {
-    var [node, curScript, uriBase, ...args] = process.argv;
+    var [node, curScript, baseUri, ...args] = process.argv;
     let uriReplaceSrcList = require('./uriReplaceSrcList.js');
-
-    replaceRelativeUriToProtocalUriInHtml(uriBase, ...args);
+    replaceRelativeUriToProtocalUriInHtml(config.baseUri, ...args);
 }
 
 module.exports = replaceRelativeUriToProtocalUriInHtml;
