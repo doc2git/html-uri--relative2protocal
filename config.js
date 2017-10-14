@@ -1,7 +1,7 @@
 var uriReplaceSrcList = require('./uriReplaceSrcList.js');
 var config = {
-    baseUri: 'http://localhost:7781',
-    basePath: '/home/doc2git/bootstrap/get-bootstrap',
+    baseUri: 'http://bootstrap.doc2git.com',
+    basePath: '/var/www/html/bootstrap.doc2git.com',
     uriReplaceSrcList: uriReplaceSrcList
 };
 module.exports = config;

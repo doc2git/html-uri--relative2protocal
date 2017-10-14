@@ -1,11 +1,13 @@
 'use strict';
 
+const path = require('path');
 const fs = require('fs');
 const url = require('url');
 const is = require('valido');
 const config = require('./config');
 
 function genSingleUrl(config, curHtml, innerRelativePath) {
+    console.log('10----');
 
     if (!is.uri(config.baseUri)) {
         throw new TypeError('Invalid baseUri');
@@ -29,21 +31,24 @@ function genSingleUrl(config, curHtml, innerRelativePath) {
 
     config.basePath = config.basePath.replace(/\/$/, '');
     config.baseUri = config.baseUri.replace(/\/$/, '');
-    var absolutePath = url.resolve(curHtml, '../' + innerRelativePath);
+    //var absolutePath = path.resolve(curHtml, '../' + innerRelativePath);
+    var absolutePath = url.resolve(curHtml, innerRelativePath);
+    console.log(config.basePath, absolutePath, '0350----');
     return absolutePath.replace(config.basePath, config.baseUri);
 }
 
-var read = (filePath, obj) => {
-    return fs.readFileSync(filePath, 'utf8');
-}
+// function genSingleUrl() {
+//
+// }
+
 
 var write = (callback, filePath, strContent) =>
-    Promise.resolve( callback(filePath) )
+    Promise.resolve(callback(filePath))
         .then(
             function (filePath) {
                 fs.writeFile(filePath, strContent, 'utf8', err => {
-                    if(err) console.error(err);
-		    console.log(filePath + ' has been converted!\n');
+                    if (err) console.error(err);
+                    console.log(filePath + ' has been converted!\n');
                 });
             }
         );
@@ -51,35 +56,63 @@ var write = (callback, filePath, strContent) =>
 function replaceRelativeUriToProtocalUriInHtml(config, ...args) {
     args = config.uriReplaceSrcList.concat([...args]);
     let defaultFnRenameFileRule = function (inputFilename) {
-        return inputFilename.replace(/\.html$/, '') + '-converted' + '.html';
+        //return inputFilename.replace(/\.html$/, '') + '-converted' + '.html';
+        return inputFilename + '.htm';
     };
     let fnRenameFileRule = args[0];
     if (typeof args[0] === 'function') {
         args[0] = args.slice(-1)[0];
         args.length--;
-    }else{
+    } else {
         fnRenameFileRule = defaultFnRenameFileRule;
     }
     args.forEach(function (itemName) {
         var f = {};
 
-        function relativeToProtocal(content) {
-            return content.replace(/\.\.\/[^"']*/g, function () {
+
+
+        var promiseHtml = new Promise((resolve, reject) => {
+            resolve(fs.readFileSync(itemName, 'utf8'))
+        });
+        promiseHtml
+            .then(function (content) {
+                return content.replace(/\.\.\/[^"']*/g, function () {
+                    var replacedUri = genSingleUrl(
+                        config,
+                        itemName,
+                        url.resolve(arguments[0], '..')
+                    );
+                    console.log(replacedUri, '78---**+++');
+                    return replacedUri;
+                });
+            }).then(function (content) {
+            if (/\.\.\/[^"']*/g.test(content)) {
+                console.error('Maybe a error has been caused, a "replace ancestors reference uri" still exists after prevsious replace, ');
+            } else {
+                return content;
+            }
+        }).then(function (content) {
+            //replacedHtml = replacedHtml.replace(/(["'])(\.\/)?(\.\.\.\/)?[^(\.\./|http://|https://)][^"']*/, function () {
+            var regExpCurDir = /=\s*["']((?:\.\/)?(?:\.\.\.\/)?[^>'"]+)['"]/g;
+            return content.replace(regExpCurDir, function () {
+                console.log(arguments[0], '98----********');
+                console.log(arguments[1], '99----********');
+                console.log(arguments[2], '100----********');
+                var replacedUri = arguments[1];
+                if (/^(http:\/\/|https:\/\/)/.test(replacedUri)) {
+                    return replacedUri;
+                }
                 return genSingleUrl(
                     config,
                     itemName,
                     arguments[0]
                 );
-            })
-        }
-
-        Promise.resolve(
-            relativeToProtocal(read(itemName, f))
-        )
-            .then(function (content) {
-                write(fnRenameFileRule, itemName, content);
             });
-
+            // console.log(content, '118&&&&&&&&&&&&&&&&&&&&&');
+        })
+        .then(function (content) {
+            write(fnRenameFileRule, itemName, content);
+        });
     });
 }
 
